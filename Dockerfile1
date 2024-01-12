@@ -1,0 +1,24 @@
+# Use NVIDIA's PyTorch container as the base image
+FROM nvcr.io/nvidia/pytorch@sha256:0558cb7893d3ce5fd8f94a77459e56b95ded56b959366eace55edb2e8e08ad6e  as builder
+
+# Set the working directory
+WORKDIR /workspace
+
+# Install the required additional packages
+RUN pip install packaging
+RUN pip install sentencepiece
+# Install ninja, ensuring it works correctly
+RUN pip install ninja
+RUN ninja --version && echo $?
+ENV NCCL_IB_GID_INDEX=3
+# Install transformers 4.32.0
+RUN pip install transformers==4.32.0
+
+# Install flash-attn without build isolation
+RUN pip install flash-attn --no-build-isolation
+
+# Install einops 0.6.1
+RUN pip install einops==0.6.1
+
+# Check PyTorch and CUDA versions
+RUN python -c "import torch; print(torch.__version__); print(torch.version.cuda)"
