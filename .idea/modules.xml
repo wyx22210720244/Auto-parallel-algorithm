@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/Megatron-LM/.idea/Megatron-LM.iml" filepath="$PROJECT_DIR$/Megatron-LM/.idea/Megatron-LM.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/random_test.iml" filepath="$PROJECT_DIR$/.idea/random_test.iml" />
     </modules>
   </component>

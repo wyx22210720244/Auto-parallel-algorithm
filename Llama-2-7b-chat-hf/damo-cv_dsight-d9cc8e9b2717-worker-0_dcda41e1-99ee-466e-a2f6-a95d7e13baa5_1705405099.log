@@ -1,0 +1,118 @@
+2024-01-16 19:34:23 +0800 CST export NCCL_DEBUG=info
+2024-01-16 19:34:23 +0800 CST output_model=./output
+2024-01-16 19:34:23 +0800 CST # 需要修改到自己的输入目录
+2024-01-16 19:34:23 +0800 CST if [ ! -d ${output_model} ];then  
+2024-01-16 19:34:23 +0800 CST     mkdir ${output_model}
+2024-01-16 19:34:23 +0800 CST fi
+2024-01-16 19:34:23 +0800 CST cp ./script/finetune.sh ${output_model}
+2024-01-16 19:34:23 +0800 CST torchrun --nnodes $WORLD_SIZE --node_rank $RANK --nproc_per_node 1 --master_addr $MASTER_ADDR --master_port $MASTER_PORT  ./script/finetune_clm.py \
+2024-01-16 19:34:23 +0800 CST     --model_name_or_path ./llama2 \
+2024-01-16 19:34:23 +0800 CST     --train_files /root/Llama2-Chinese/data/train_sft.csv \
+2024-01-16 19:34:23 +0800 CST     --validation_files  /root/Llama2-Chinese/data/dev_sft.csv \
+2024-01-16 19:34:23 +0800 CST     --per_device_train_batch_size 8 \
+2024-01-16 19:34:23 +0800 CST     --per_device_eval_batch_size 8 \
+2024-01-16 19:34:23 +0800 CST     --do_train \
+2024-01-16 19:34:23 +0800 CST     --do_eval \
+2024-01-16 19:34:23 +0800 CST     --use_fast_tokenizer false \
+2024-01-16 19:34:23 +0800 CST     --output_dir ${output_model} \
+2024-01-16 19:34:23 +0800 CST     --evaluation_strategy  steps \
+2024-01-16 19:34:23 +0800 CST     --max_eval_samples 800 \
+2024-01-16 19:34:23 +0800 CST     --learning_rate 1e-4 \
+2024-01-16 19:34:23 +0800 CST     --gradient_accumulation_steps 4 \
+2024-01-16 19:34:23 +0800 CST     --num_train_epochs 10 \
+2024-01-16 19:34:23 +0800 CST     --warmup_steps 400 \
+2024-01-16 19:34:23 +0800 CST     --logging_dir ${output_model}/logs \
+2024-01-16 19:34:23 +0800 CST     --logging_strategy steps \
+2024-01-16 19:34:23 +0800 CST     --logging_steps 1 \
+2024-01-16 19:34:23 +0800 CST     --save_strategy steps \
+2024-01-16 19:34:23 +0800 CST     --preprocessing_num_workers 10 \
+2024-01-16 19:34:23 +0800 CST     --save_steps 100000 \
+2024-01-16 19:34:23 +0800 CST     --eval_steps 100000 \
+2024-01-16 19:34:23 +0800 CST     --save_total_limit 2000 \
+2024-01-16 19:34:23 +0800 CST     --seed 42 \
+2024-01-16 19:34:23 +0800 CST     --disable_tqdm false \
+2024-01-16 19:34:23 +0800 CST     --ddp_find_unused_parameters false \
+2024-01-16 19:34:23 +0800 CST     --block_size 2048 \
+2024-01-16 19:34:23 +0800 CST     --report_to tensorboard \
+2024-01-16 19:34:23 +0800 CST     --overwrite_output_dir \
+2024-01-16 19:34:23 +0800 CST     --ignore_data_skip true \
+2024-01-16 19:34:23 +0800 CST     --bf16 \
+2024-01-16 19:34:23 +0800 CST     --gradient_checkpointing \
+2024-01-16 19:34:23 +0800 CST     --bf16_full_eval \
+2024-01-16 19:34:23 +0800 CST     --ddp_timeout 18000000 \
+2024-01-16 19:34:23 +0800 CST     | tee -a ${output_model}/train.log
+2024-01-16 19:34:23 +0800 CST     
+2024-01-16 19:34:23 +0800 CST     # --resume_from_checkpoint ${output_model}/checkpoint-20400 \
+2024-01-16 19:34:26 +0800 CST [2024-01-16 11:34:25,579] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+2024-01-16 19:34:27 +0800 CST ===================================BUG REPORT===================================
+2024-01-16 19:34:27 +0800 CST Welcome to bitsandbytes. For bug reports, please run
+2024-01-16 19:34:27 +0800 CST python -m bitsandbytes
+2024-01-16 19:34:27 +0800 CST  and submit this information together with your error trace to: https://github.com/TimDettmers/bitsandbytes/issues
+2024-01-16 19:34:27 +0800 CST ================================================================================
+2024-01-16 19:34:27 +0800 CST bin /usr/local/lib/python3.10/dist-packages/bitsandbytes/libbitsandbytes_cuda121.so
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('/usr/local/nvidia/lib'), PosixPath('/usr/local/cuda/compat/lib'), PosixPath('/usr/local/nvidia/lib64')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: /usr/local/lib/python3.10/dist-packages/torch/lib:/usr/local/lib/python3.10/dist-packages/torch_tensorrt/lib:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64 did not contain ['libcudart.so', 'libcudart.so.11.0', 'libcudart.so.12.0'] as expected! Searching further paths...
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('//192.168.180.51'), PosixPath('tcp'), PosixPath('8080')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('10001'), PosixPath('//192.168.180.51'), PosixPath('tcp')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('Asia/Shanghai')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('//192.168.180.51'), PosixPath('tcp'), PosixPath('6379')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('443'), PosixPath('//192.168.0.1'), PosixPath('tcp')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('7.0'), PosixPath('registry.cn-hangzhou.aliyuncs.com/wyxcode/cuda118')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('//192.168.180.51'), PosixPath('tcp'), PosixPath('8265')}
+2024-01-16 19:34:27 +0800 CST CUDA_SETUP: WARNING! libcudart.so not found in any environmental path. Searching in backup paths...
+2024-01-16 19:34:27 +0800 CST CUDA SETUP: CUDA runtime path found: /usr/local/cuda/lib64/libcudart.so
+2024-01-16 19:34:27 +0800 CST CUDA SETUP: Highest compute capability among GPUs detected: 8.0
+2024-01-16 19:34:27 +0800 CST CUDA SETUP: Detected CUDA version 121
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST /usr/local/lib/python3.10/dist-packages/bitsandbytes/cuda_setup/main.py:149: UserWarning: WARNING: The following directories listed in your path were found to be non-existent: {PosixPath('/tmp/torchelastic_b2xuvkjp/none_u4c7osa6/attempt_0/0/error.json')}
+2024-01-16 19:34:27 +0800 CST   warn(msg)
+2024-01-16 19:34:27 +0800 CST CUDA SETUP: Loading binary /usr/local/lib/python3.10/dist-packages/bitsandbytes/libbitsandbytes_cuda121.so...
+2024-01-16 19:34:31 +0800 CST Traceback (most recent call last):
+2024-01-16 19:34:31 +0800 CST   File "/wenyang/deepspeed/./script/finetune_clm.py", line 613, in <module>
+2024-01-16 19:34:31 +0800 CST     main()
+2024-01-16 19:34:31 +0800 CST   File "/wenyang/deepspeed/./script/finetune_clm.py", line 251, in main
+2024-01-16 19:34:31 +0800 CST     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+2024-01-16 19:34:31 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/transformers/hf_argparser.py", line 338, in parse_args_into_dataclasses
+2024-01-16 19:34:31 +0800 CST     obj = dtype(**inputs)
+2024-01-16 19:34:31 +0800 CST   File "<string>", line 13, in __init__
+2024-01-16 19:34:31 +0800 CST   File "/wenyang/deepspeed/./script/finetune_clm.py", line 156, in __post_init__
+2024-01-16 19:34:31 +0800 CST     if type(self.target_modules)==str:
+2024-01-16 19:34:31 +0800 CST AttributeError: 'ModelArguments' object has no attribute 'target_modules'
+2024-01-16 19:34:34 +0800 CST ERROR:torch.distributed.elastic.multiprocessing.api:failed (exitcode: 1) local_rank: 0 (pid: 86) of binary: /usr/bin/python
+2024-01-16 19:34:34 +0800 CST Traceback (most recent call last):
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/bin/torchrun", line 33, in <module>
+2024-01-16 19:34:34 +0800 CST     sys.exit(load_entry_point('torch==2.1.0a0+4136153', 'console_scripts', 'torchrun')())
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+2024-01-16 19:34:34 +0800 CST     return f(*args, **kwargs)
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/torch/distributed/run.py", line 797, in main
+2024-01-16 19:34:34 +0800 CST     run(args)
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/torch/distributed/run.py", line 788, in run
+2024-01-16 19:34:34 +0800 CST     elastic_launch(
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/torch/distributed/launcher/api.py", line 134, in __call__
+2024-01-16 19:34:34 +0800 CST     return launch_agent(self._config, self._entrypoint, list(args))
+2024-01-16 19:34:34 +0800 CST   File "/usr/local/lib/python3.10/dist-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+2024-01-16 19:34:34 +0800 CST     raise ChildFailedError(
+2024-01-16 19:34:34 +0800 CST torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+2024-01-16 19:34:34 +0800 CST ============================================================
+2024-01-16 19:34:34 +0800 CST ./script/finetune_clm.py FAILED
+2024-01-16 19:34:34 +0800 CST ------------------------------------------------------------
+2024-01-16 19:34:34 +0800 CST Failures:
+2024-01-16 19:34:34 +0800 CST   <NO_OTHER_FAILURES>
+2024-01-16 19:34:34 +0800 CST ------------------------------------------------------------
+2024-01-16 19:34:34 +0800 CST Root Cause (first observed failure):
+2024-01-16 19:34:34 +0800 CST [0]:
+2024-01-16 19:34:34 +0800 CST   time      : 2024-01-16_11:34:33
+2024-01-16 19:34:34 +0800 CST   host      : dsight-d9cc8e9b2717-worker-0
+2024-01-16 19:34:34 +0800 CST   rank      : 1 (local_rank: 0)
+2024-01-16 19:34:34 +0800 CST   exitcode  : 1 (pid: 86)
+2024-01-16 19:34:34 +0800 CST   error_file: <N/A>
+2024-01-16 19:34:34 +0800 CST   traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+2024-01-16 19:34:34 +0800 CST ============================================================

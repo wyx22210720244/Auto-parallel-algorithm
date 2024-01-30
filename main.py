@@ -5,6 +5,7 @@ from pulp import *
 import numpy as np
 from collections import defaultdict
 from training_estimator import get_full_training_memory_consumption, get_args
+import json
 
 
 # Path: algorithm/main.py
@@ -239,6 +240,7 @@ def create_pp_group(dp_allocation, cluster, tp_group):
                 pp_group[group_id].append(gpu)
     return pp_group
 
+
 def dp_group_gpu_assignment_with_bandwidth(assignments, all_gpus, cluster):
     for idx, inner_dict in assignments.items():
         group_num = len(inner_dict)
@@ -277,12 +279,12 @@ def dp_group_gpu_assignment_with_bandwidth(assignments, all_gpus, cluster):
 def build_cluster():
     # cluster
     cluster = Cluster()
-    total_nodes = 6
+    total_nodes = 1
     # gpus_per_node = 8
-    a100_num_nodes = 3
-    v100_num_nodes = 2
-    h800_num_nodes = 1
-    a100_gpus_per_node = 8
+    a100_num_nodes = 1
+    v100_num_nodes = 0
+    h800_num_nodes = 0
+    a100_gpus_per_node = 3
     v100_gpus_per_node = 8
     # total_gpus = total_nodes * gpus_per_node
     a100_temp = a100_num_nodes
@@ -421,6 +423,7 @@ def non_linear_optimize(min_memory_usage, cluster, max_dp_num):
         assert "Model is infeasible!"
     else:
         assert "Solver terminated with condition:", result.solver.termination_condition
+    return pp_group
 
 
 def non_linear_optimize_test(min_memory_usage, all_gpus, max_dp_num):
@@ -463,14 +466,27 @@ def non_linear_optimize_test(min_memory_usage, all_gpus, max_dp_num):
             print(f"  {var_obj.name}[{index}] = {var_obj[index].value}")
 
 
+def dict_to_json(dict):
+    result = defaultdict(list)
+    for key, value in dict.items():
+        for gpu in value:
+            if isinstance(gpu, list):
+                result[key].append([gpu[0].node * 8 + gpu[0].local_rank, gpu[1].node * 8+gpu[1].local_rank])
+            else:
+                result[key].append((gpu.node*8+ gpu.local_rank))
+    with open("allocations.json", "w") as f:
+        json.dump(result, f)
+    return result
+
+
 if __name__ == '__main__':
     # cluster
     cluster = build_cluster()
     print(cluster)
-    max_dp_num = 10
+    max_dp_num = 4
     # args = get_args()
     # 任务信息
-    min_memory_usage = 1000
+    min_memory_usage = 100
     # print(f"min_memory_usage:{min_memory_usage}")
     all_gpus = sorted([gpus for nodes in cluster.nodes for gpus in nodes.gpus],
                       key=lambda gpus: gpus.compute_power,
@@ -515,4 +531,6 @@ if __name__ == '__main__':
     #     print(f"DP{j} memory is {sum([assignment[i][j].varValue * all_gpus[i].memory for i in range(total_gpus)])}")
     # print("DP num difference is:\n", max_dp_num_difference - 1)
     # print("group quantities:\n", dp_group_gpu_assignment_with_bandwidth(assignment, all_gpus))
-    non_linear_optimize(min_memory_usage, cluster, max_dp_num)
+    pp_group = non_linear_optimize(min_memory_usage, cluster, max_dp_num)
+    pp_group_json = dict_to_json(pp_group)
+    print(f"pp_group_json:{pp_group_json}")

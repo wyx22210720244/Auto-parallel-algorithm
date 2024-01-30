@@ -2,9 +2,9 @@
 
 # Runs the "7B" parameter model
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export NCCL_DEBUG=INFO
+# export NCCL_DEBUG=INFO
 export NCCL_IB_GID_INDEX=3
-GPUS_PER_NODE=8
+GPUS_PER_NODE=4
 # Change for multinode config
 #MASTER_ADDR=localhost
 #MASTER_PORT=6000
@@ -26,18 +26,18 @@ DISTRIBUTED_ARGS="
 "
 
 GPT_ARGS="
-    --tensor-model-parallel-size 2 \
-    --pipeline-model-parallel-size 4 \
+    --tensor-model-parallel-size 1 \
+    --pipeline-model-parallel-size 2 \
     --sequence-parallel \
-    --num-layers 20 \
-    --hidden-size 2048 \
+    --num-layers 4 \
+    --hidden-size 512 \
     --num-attention-heads 32 \
     --seq-length 2048 \
     --max-position-embeddings 2048 \
     --micro-batch-size 4 \
-    --global-batch-size 32 \
+    --global-batch-size 16 \
     --lr 0.00015 \
-    --train-iters 500 \
+    --train-iters 50000 \
     --lr-decay-iters 320000 \
     --lr-decay-style cosine \
     --min-lr 1.0e-5 \
