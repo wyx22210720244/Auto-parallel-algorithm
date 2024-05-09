@@ -255,24 +255,30 @@ def test_zip(list_var):
 
 def test_change_to_symmetric_list(list1):
     list_var = [[item] if not isinstance(item, list) else item for item in list1]
+    maxlength = 1
     for value in list_var:
-        if len(value) == 1:
-            value.append(value[0])
+        if len(value) >= maxlength:
+            maxlength = len(value)
+    if maxlength > 1:
+        for value in list_var:
+            if len(value) <= 1:
+                value.append(value[0])
     return list_var
 
+
 def test_torch_empty():
-    tensor  = torch.randn(10,5)
+    tensor = torch.randn(10, 5)
     print(tensor)
     print(tensor[:5, :])
 
+
 def test_dict_identity():
     dict = {'a': 1, 'b': 1}
-    print(dict['a']==dict['b'])
-
+    print(dict['a'] == dict['b'])
 
 
 def test_in_list():
-    list1 = [1,2,3,4]
+    list1 = [1, 2, 3, 4]
     print(4 in list1)
 
 
@@ -284,17 +290,250 @@ def test_silce():
     tensor2[0, 0] = 0
     print(tensor)
 
+
 def test_dp_layer_rank_mapping():
-    map = {"1":{0:[1,2],1:[3,4]}, "2":{2:[1,4]}}
+    map = {"1": {0: [1, 2], 1: [3, 4]}, "2": {2: [1, 4]}}
     filename = "dp_layer_rank_mapping.json"
     with open(filename, 'w') as f:
         json.dump(map, f)
     # result = json.dumps(map)
 
+
+def get_layer_rank_mapping():
+    """Return layer rank mapping"""
+    with open("dp_layer_rank_mapping.json", 'r') as f:
+        layer_rank_mapping = json.load(f)
+    return layer_rank_mapping
+
+
+def find_matching_layer_dp_group():
+    # args = get_args()
+    layer_rank_mapping = get_layer_rank_mapping()
+    num_layer = 6
+    # dp_group = list(layer_rank_mapping.keys())
+    matching_layer = {}
+    for i in range(1, num_layer + 1):
+        matching_layer[i] = []
+    layer_curr = 1
+    for dp_num, rank_layer in layer_rank_mapping.items():
+        for rank, layer in rank_layer.items():
+            while True:
+                if layer_curr <= layer[1]:
+                    matching_layer[layer_curr].append(rank)
+                    layer_curr += 1
+                else:
+                    break
+        layer_curr = 1
+    print(matching_layer)
+    return matching_layer
+
+
+def test_tensor_view():
+    tensor1 = torch.Tensor()
+    tensor2 = torch.tensor([1, 2, 3])
+    tensor1 = torch.cat((tensor1, tensor2), dim=0)
+    print(tensor1)
+
+
+def test_name():
+    list1 = {0: [("H800", 4)]}
+    gpu_compute_power = ["H800", "A100", "V100"]
+    print(list1[0][0][0])
+
+def assign_dp_group():
+    layer_allocation = json.load(open("layers.json"))
+    dp_allocation = json.load(open("allocations.json"))
+    for key, value in dp_allocation.items():
+        for gpus in value:
+            tp_size = len(gpus)
+    unique_layer_allocation = set()
+    # unique_layer_allocation.add(0)
+    for _, layers in layer_allocation.items():
+        for layer in layers:
+            unique_layer_allocation.add(layer)
+    sorted_unique_intervals = sorted(list(unique_layer_allocation))
+    print(f"sorted_unique_intervals:{sorted_unique_intervals}")
+    if tp_size ==2:
+        dp_group_comm_up = defaultdict(list)
+        dp_group_comm_down = defaultdict(list)
+        group_idx = 0
+        for layer in sorted_unique_intervals:
+            for dp_group, gpus in dp_allocation.items():
+                for idx, gpu in enumerate(gpus):
+                    if layer_allocation[dp_group][idx] >= layer:
+                        dp_group_comm_up[group_idx].append(gpu[0])
+                        dp_group_comm_down[group_idx].append(gpu[1])
+                        break
+            group_idx += 1
+        dp_group_comm = defaultdict(list)
+        for key,_ in dp_group_comm_up.items():
+            dp_group_comm[key].append(dp_group_comm_up[key])
+            dp_group_comm[key].append(dp_group_comm_down[key])
+        print(f"dp_group_comm_up:{dp_group_comm_up}")
+        print(f"dp_group_comm_down:{dp_group_comm_down}")
+        print(dp_group_comm)
+    if tp_size == 4:
+        dp_group_comm_1 = defaultdict(list)
+        dp_group_comm_2 = defaultdict(list)
+        dp_group_comm_3 = defaultdict(list)
+        dp_group_comm_4 = defaultdict(list)
+        group_idx = 0
+        for layer in sorted_unique_intervals:
+            for dp_group, gpus in dp_allocation.items():
+                for idx, gpu in enumerate(gpus):
+                    if layer_allocation[dp_group][idx] >= layer:
+                        dp_group_comm_1[group_idx].append(gpu[0])
+                        dp_group_comm_2[group_idx].append(gpu[1])
+                        dp_group_comm_3[group_idx].append(gpu[2])
+                        dp_group_comm_4[group_idx].append(gpu[3])
+                        break
+            group_idx += 1
+        dp_group_comm = defaultdict(list)
+        for key, _ in dp_group_comm_1.items():
+            dp_group_comm[key].append(dp_group_comm_1[key])
+            dp_group_comm[key].append(dp_group_comm_2[key])
+            dp_group_comm[key].append(dp_group_comm_3[key])
+            dp_group_comm[key].append(dp_group_comm_4[key])
+        print(f"dp_group_comm_1:{dp_group_comm_1}")
+        print(f"dp_group_comm_2:{dp_group_comm_2}")
+        print(f"dp_group_comm_3:{dp_group_comm_3}")
+        print(f"dp_group_comm_4:{dp_group_comm_4}")
+        print(dp_group_comm)
+        
+    dp_layer_comm = []
+    sorted_unique_intervals.insert(0, 0)
+    for idx in range(1,len(sorted_unique_intervals)):
+        dp_layer_comm.append(sorted_unique_intervals[idx]-sorted_unique_intervals[idx-1])
+    print(
+        f"dp_layer_comm:{dp_layer_comm}"
+    )
+def test_dp_count():
+    dp_allocation = json.load(open("allocations.json"))
+    gpu_count  = 0
+    for key, value in dp_allocation.items():
+        for gpu in value:
+            if isinstance(gpu, list):
+                gpu_count += len(gpu)
+            else:
+                gpu_count += 1
+    print(gpu_count)
+
+def non_linear_optimize(min_memory_usage, cluster, max_dp_num):
+    # all_gpus = sorted([gpus for nodes in cluster.nodes for gpus in nodes.gpus],
+    #                   key=lambda gpus: gpus.compute_power,
+    #                    reverse=True)
+    all_gpus = []
+    for nodes in cluster.nodes:
+        for gpus in nodes.gpus:
+            all_gpus.append(gpus)
+    print(f"all_gpus:{all_gpus}")
+    # model
+    model = ConcreteModel()
+    model.x = Var(range(len(all_gpus)), range(max_dp_num), within=Binary)
+    model.y = Var(range(max_dp_num), within=Binary)
+    model.min_dp_group_compute = Var(within=Integers, initialize=0)
+    model.n = Var(range(max_dp_num), within=NonNegativeReals)
+    model.g = Var(range(max_dp_num), within=Integers)
+    model.bubble = Var(range(max_dp_num), within=Reals)
+    model.m = Var(range(max_dp_num), within=Integers)
+    model.s = Var(range(max_dp_num), within=Integers)
+    # model.num_micro_batch = Var(range(max_dp_num), within=NonNegativeReals)
+    model.matrix_q = Var(range(cluster.num_nodes), range(max_dp_num), within=Integers, initialize=0)
+    model.d = Var(within=Integers, initialize=1)
+    model.div = Var(range(cluster.num_nodes), range(max_dp_num), within=NonNegativeIntegers)
+    model.tp_num = Var(range(max_dp_num), within=Reals, initialize=0)
+    matrix_q = [[0 for _ in range(cluster.num_gpus)] for _ in range(cluster.num_nodes)]
+
+    all_gpus = []
+    idx = 0
+    for nodes in cluster.nodes:
+        for gpus in nodes.gpus:
+            all_gpus.append(gpus)
+            matrix_q[nodes.node_id][idx] = 1
+            idx += 1
+    print(f"all_gpus:{all_gpus}")
+    print(f"matrix_N:{matrix_q}")
+
+    model.object = Objective(expr=model.min_dp_group_compute * model.d, sense=maximize)
+    # constraint
+    model.constraints = ConstraintList()
+    # memory
+    for j in range(max_dp_num):
+        model.constraints.add(model.m[j] * model.y[j] + 10000 * (1 - model.y[j]) >= min_memory_usage)
+        model.constraints.add(model.m[j] == sum(model.x[i, j] * all_gpus[i].memory for i in range(len(all_gpus))))
+        model.constraints.add(model.d == sum(model.y[j] for j in range(max_dp_num)))
+        model.constraints.add(
+            model.g[j] == (sum(model.x[i, j] * all_gpus[i].compute_power for i in range(len(all_gpus))) * (
+                    1 - model.bubble[j])))
+        model.constraints.add(model.min_dp_group_compute <= model.g[j] + 10000 * (1 - model.y[j]))
+        model.constraints.add(model.n[j] >= model.y[j])
+        model.constraints.add(model.n[j] <= 1000 * model.y[j])
+        model.constraints.add(model.n[j] == sum(model.x[i, j] for i in range(len(all_gpus))))
+        model.constraints.add(model.tp_num[j] == sum(model.div[i, j] for i in range(cluster.num_nodes)))
+        model.constraints.add(model.s[j] == model.n[j] - model.tp_num[j])
+        model.constraints.add(model.bubble[j] == (model.s[j] - 1) / (4 - 1 + model.s[j]) * model.y[j])
+    model.constraints.add(model.d == sum(model.y[j] for j in range(max_dp_num)))
+    for i in range(len(all_gpus)):
+        model.constraints.add(sum(model.x[i, j] for j in range(max_dp_num)) == 1)
+    for i in range(cluster.num_nodes):
+        for j in range(max_dp_num):
+            model.constraints.add(
+                model.matrix_q[i, j] == sum(matrix_q[i][k] * model.x[k, j] for k in range(cluster.num_gpus)))
+            model.constraints.add(model.div[i, j] <= model.matrix_q[i, j] / 2)
+            model.constraints.add(model.div[i, j] >= model.matrix_q[i, j] / 2 - 1)
+    # model.dp_group_bubble_constraint = Constraint(range(max_dp_num), rule=dp_group_bubble_constraint)
+    solver_path = "/Users/wangyuxiao/Downloads/Bonmin-1.8.8/build/bin/bonmin"
+    # solver = SolverFactory('bonmin', executable=solver_path)
+    solver = SolverFactory('scip')
+    solver.options['limits/time'] = 600
+    # solver.options['max_iter'] = 1000
+    result = solver.solve(model, tee=True)
+    # 检查求解器是否找到了一个最优解
+    # 打印变量 x 的值
+    print("Solver Status:", result.solver.status)
+    print("Solver Termination Condition:", result.solver.termination_condition)
+
+    # 判断求解是否成功
+    if result.solver.termination_condition == TerminationCondition.optimal or result.solver.termination_condition == TerminationCondition.maxTimeLimit:
+        print("Solution is optimal!")
+        # 打印变量的值
+        print(f"目标函数的值为：{model.object()}")
+        model_variables = model.component_objects(Var)
+        for var_obj in model_variables:
+            print(f"Variable {var_obj.name}:")
+            for index in var_obj:
+                print(f"  {var_obj.name}[{index}] = {var_obj[index].value}")
+        dp_allcation = defaultdict(list)
+        for dp_group in range(max_dp_num):
+            for gpu in range(len(all_gpus)):
+                if model.y[dp_group].value > 0.5 and model.x[gpu, dp_group].value > 0.5:
+                    dp_allcation[dp_group].append(all_gpus[gpu])
+        print(f"dp_allcation:{dp_allcation}")
+        tp_group = create_tp_group(dp_allcation, cluster)
+        print(f"tp_group:{tp_group}")
+        pp_group = create_pp_group(dp_allcation, cluster, tp_group)
+        print(f"pp_group:{pp_group}")
+    elif result.solver.termination_condition == TerminationCondition.infeasible:
+        assert "Model is infeasible!"
+    else:
+        assert "Solver terminated with condition:", result.solver.termination_condition
+    return pp_group
+
+def test_pop():
+    x = [1,2,3,4]
+    y = x.pop(0)
+    print(y)
 if __name__ == '__main__':
-    # test_origin_group_allocation()
-    # test_torch_empty()
-    # test_dict_identity()
-    # test_in_list()
-    # test_silce()
-    test_dp_layer_rank_mapping()
+#     # test_origin_group_allocation()
+#     # test_torch_empty()
+#     # test_dict_identity()
+#     # test_in_list()
+#     # test_silce()
+#     # test_dp_layer_rank_mapping()
+#     # test_name(
+# 
+#     assign_dp_group(
+#     )
+#     test_dp_count()
+    test_pop()
+    

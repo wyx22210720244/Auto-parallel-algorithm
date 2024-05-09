@@ -74,17 +74,8 @@ def get_args():
     # args.world_size = args.nproc_per_node * args.nnodes
     # args.data_parallel_size = args.world_size // (args.tensor_model_parallel_size * args.pipeline_model_parallel_size)
     global PARAM_BYTES
-    PARAM_BYTES = 2 if args.fp16 or args.bf16 else 4
+    PARAM_BYTES = 2
     return args
-
-
-def get_ffn_hidden_size(args):
-    if args.ffn_hidden_size is None:
-        if args.swiglu:
-            args.ffn_hidden_size = int((4 * args.hidden_size * 2 / 3) / 64) * 64
-        else:
-            args.ffn_hidden_size = 4 * args.hidden_size
-    return args.ffn_hidden_size
 
 
 def get_vocab_size_with_padding(args):
@@ -99,135 +90,96 @@ def get_vocab_size_with_padding(args):
     return vocab_size
 
 
-def get_embedding_parameter(args):
-    vocab_size = get_vocab_size_with_padding(args)
-    # vocab_size = 130528
-    embedding_parameter = (vocab_size + args.seq_length) * args.hidden_size
-    return embedding_parameter
-
-
-def get_transformer_parameter(args):
-    attention_parameter = (args.hidden_size * args.hidden_size +
-                           args.hidden_size) * 4 + args.hidden_size * 2
-    return attention_parameter
-
-
-def get_attention_size(args):
-    args.attention_size = args.hidden_size // args.num_attention_heads
-    return args.attention_size
-
-
-def get_ffn_parameter(args):
-    ffn_hidden_size = get_ffn_hidden_size(args)
-    ffn_parameter = (ffn_hidden_size * args.hidden_size * 2
-                     + args.hidden_size * 3 + ffn_hidden_size)
-    return ffn_parameter
-
-
-def get_full_model_parameter(args):
-    embedding_parameter = get_embedding_parameter(args)
-    transformer_parameter = get_transformer_parameter(args)
-    ffn_parameter = get_ffn_parameter(args)
-    full_model_parameter = embedding_parameter + \
-                           (transformer_parameter + ffn_parameter) * args.num_layers
-    return full_model_parameter
-
-
-def get_activation_memory(args):
-    batch_size = args.micro_batch_size
-    num_layer = args.num_layers
-    seq_length = args.seq_length
-    hidden_size = args.hidden_size
-    num_attention_heads = args.num_attention_heads
-    ffn_size = get_ffn_hidden_size(args)
-    global PARAM_BYTES
-    activation_memory = num_layer * batch_size * (PARAM_BYTES * (10 * seq_length * hidden_size
-                                                                 + 2 * seq_length * ffn_size + 2 * seq_length * seq_length * num_attention_heads)
-                                                  + seq_length * seq_length * args.num_attention_heads + 2 * seq_length * hidden_size)
-
-    return activation_memory
-
-
 def bytes_to_gb(bytes):
     return bytes / 1024 / 1024 / 1024
 
 
-def get_parameter_memory(args):
+def get_transformer_block_param(args):
+    h = args.hidden_size
+    tp = args.tensor_model_parallel_size
+    input_norm_w = h
+    input_norm_b = h
+    atten_qkv_w = 3 * h / tp * h
+    atten_qkv_b = 3 * h / tp
+    atten_dense_w = h * h / tp
+    atten_dense_b = h
+    post_atten_w = h
+    post_atten_b = h
+    mlp_h_4h_w = 4 * h / tp * h
+    mlp_h_4h_b = 4 * h / tp
+    mlp_4h_h_w = h * 4 * h / tp
+    mlp_4h_h_b = h
+    param = (input_norm_w + input_norm_b + atten_qkv_b + atten_qkv_w +
+             atten_dense_w + atten_dense_b + post_atten_w + post_atten_b
+             + mlp_h_4h_w + mlp_h_4h_b + mlp_4h_h_w + mlp_4h_h_b)
+    return param
+
+
+def get_embedding_param(args):
+    h = args.hidden_size
+    tp = args.tensor_model_parallel_size
+    emb_w = 50304 / tp * h
+    pos_w = args.seq_length * h
+    return emb_w + pos_w
+
+
+def get_final_norm_param(args):
+    h = args.hidden_size
+    tp = args.tensor_model_parallel_size
+    final_norm_w = h
+    final_norm_b = h
+    return final_norm_b + final_norm_w
+
+
+def get_final_embedding_param(args):
+    h = args.hidden_size
+    tp = args.tensor_model_parallel_size
+    return 50304 / tp * h
+
+
+def get_memory(args):
     global PARAM_BYTES
-    parameter_memory = get_full_model_parameter(args) * PARAM_BYTES
-    return parameter_memory
+    t = args.tensor_model_parallel_size
+    h = args.hidden_size
+    s = args.seq_length
+    b = args.micro_batch_size
+    a = args.num_attention_heads
+    n = args.num_layers
+    param = (get_embedding_param(args) + get_transformer_block_param(args) * n + get_final_norm_param(
+        args) + get_final_embedding_param(args)) * t
+    act_mem_per_layer = s * b * h * (10 + 24 / t + 5 * a * s / (h * t))
+    fixed_memory = bytes_to_gb(param * PARAM_BYTES * 8)
+    variable_memory = bytes_to_gb(act_mem_per_layer * PARAM_BYTES * n)
+    return (fixed_memory + variable_memory) * 1.2
 
 
-def get_gradient_memory(args):
+def get_stage_memory(stage, args, max_stage, layers):
     global PARAM_BYTES
-    gradient_memory = get_full_model_parameter(args) * PARAM_BYTES
-    if args.pipeline_model_parallel_size > 1:
-        gradient_memory = gradient_memory * 2
-    return gradient_memory
+    t = args.tensor_model_parallel_size
+    h = args.hidden_size
+    s = args.seq_length
+    b = args.micro_batch_size
+    a = args.num_attention_heads
+    l = layers
+    param = get_transformer_block_param(args) * l * t
+    # 判断首尾stage来添加格外参数
+    if stage == 0:
+        param += get_embedding_param(args)*t
+    act_mem_per_layer = s * b * h * (10 + 24 / t + 5 * a * s / (h * t))
+    fixed_memory = bytes_to_gb(param * PARAM_BYTES * 8)
+    variable_memory = bytes_to_gb(act_mem_per_layer * l * (max_stage - stage) * PARAM_BYTES)
+    return fixed_memory + variable_memory
 
 
-def get_optimizer_memory(args):
-    global PARAM_BYTES
-    # 以Adam进行计算
-    if PARAM_BYTES == 2:
-        optimizer_memory = get_full_model_parameter(args) * PARAM_BYTES * 6
-    else:
-        optimizer_memory = get_full_model_parameter(args) * PARAM_BYTES * 2
-    return optimizer_memory
-
-
-def get_peak_memory(args):
-    peak_memory = get_parameter_memory(args) + \
-                  get_optimizer_memory(args) + \
-                  get_gradient_memory(args) + \
-                  get_activation_memory(args)
-    return peak_memory
-
-
-def get_memory_without_activation(args):
-    memory_without_activation = get_parameter_memory(args) + \
-                                get_optimizer_memory(args) + \
-                                get_gradient_memory(args)
-    return memory_without_activation
-
-
-def get_activation_memory_with_pp_and_tp(args):
-    pp_size = args.pipeline_model_parallel_size
-    # tp_size = args.tensor_model_parallel_size
-    activation_per_layer = get_activation_memory(args) / args.num_layers
-    total_activation_memory = 0
-    for i in range(pp_size):
-        total_activation_memory += activation_per_layer * args.num_layers / pp_size * (pp_size - i)
-        # print(f"total_activation_memory_tem:{total_activation_memory}")
-    # total_activation_memory = activation_per_layer * args.num_layers * (pp_size - 1 + 1 / pp_size)
-    return total_activation_memory
-
-
-def get_activation_memory_for_first_pp_stage(args):
-    activation_per_layer = get_activation_memory(args) / args.num_layers
-    activation_memory_for_first_stage = activation_per_layer / args.tensor_model_parallel_size * args.num_layers
-    return activation_memory_for_first_stage
-
-
-def get_full_training_memory_consumption(args):
-    memory_consumption = get_activation_memory_with_pp_and_tp(args) + get_memory_without_activation(args)
-    return bytes_to_gb(memory_consumption)
+def get_param(args):
+    t = args.tensor_model_parallel_size
+    n = args.num_layers
+    param = (get_embedding_param(args) + get_transformer_block_param(args) * n + get_final_norm_param(
+        args) + get_final_embedding_param(args)) * t
+    return param
 
 
 if __name__ == "__main__":
     args = get_args()
-    embedding_parameter = get_embedding_parameter(args)
-    transformer_parameter = get_transformer_parameter(args)
-    ffn_parameter = get_ffn_parameter(args)
-    full_model_parameter = get_full_model_parameter(args)
-    print(f"embedding_parameter:{embedding_parameter}")
-    print(f"transformer_parameter:{transformer_parameter}")
-    print(f"ffn_parameter:{ffn_parameter}")
-    print(f"full_model_parameter:{full_model_parameter}")
-    print(f"full_activation_memory:{bytes_to_gb(get_activation_memory(args))}GB")
-    # print(f"peak_memory:{bytes_to_gb(get_peak_memory(args))}GB")
-    print(f"memory_for_first_pp_stage:{bytes_to_gb(get_activation_memory_for_first_pp_stage(args))}GB")
-    print(f"memory_without_activation:{bytes_to_gb(get_memory_without_activation(args))}GB")
-    print(f"activation_memory_with_pp_and_tp:{bytes_to_gb(get_activation_memory_with_pp_and_tp(args))}GB")
-    print(
-        f"total_memory:{bytes_to_gb(get_activation_memory_with_pp_and_tp(args) + get_memory_without_activation(args))}GB")
+    print(f"估计显存值:{get_memory(args)}")
+    print(f"参数量:{get_param(args)}")
